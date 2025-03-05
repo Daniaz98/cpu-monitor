@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -93,7 +95,52 @@ func monitor() {
 	}
 }
 
+func reportsCSV(processes []ProcessInfo, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	header := []string{"PID", "Nome", "Uso de CPU (%)", "Uso de Memória (bytes)"}
+	if err := writer.Write(header); err != nil {
+		return err
+	}
+
+	for _, p := range processes {
+		line := []string{
+			strconv.Itoa(int(p.PID)),
+			p.Name,
+			fmt.Sprintf("%.2f", p.CPU),
+			formatMemory(p.Memory),
+		}
+		writer.Write(line)
+	}
+
+	fmt.Println("Relatório gerado:", filename)
+	return nil
+
+}
+
+func formatMemory(mem uint64) string {
+	const MB = 1024 * 1024
+	const GB = 1024 * 1024 * 1024
+
+	if mem >= GB {
+		return fmt.Sprintf("%.2f GB", float64(mem)/float64(GB))
+	}
+	return fmt.Sprintf("%.2f MB", float64(mem)/float64(MB))
+}
+
 func main() {
 	fmt.Println("Iniciando monitor de CPU e Memória...(Ctrl + C para sair)")
+	processes := getTopProcess()
+	err := reportsCSV(processes, "relatorio_processos.csv")
+	if err != nil {
+		fmt.Println("Erro ao gerar relatório", err)
+	}
 	monitor()
 }
